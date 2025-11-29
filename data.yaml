@@ -1,0 +1,8 @@
+# Paste this exactly (Check indentation)
+train: /home/akubrecah/Desktop/NIRU HACKATHON 2025/ulinzi-project/train/images
+val: /home/akubrecah/Desktop/NIRU HACKATHON 2025/ulinzi-project/valid/images
+test: /home/akubrecah/Desktop/NIRU HACKATHON 2025/ulinzi-project/test/images
+
+# (Keep the nc and names sections below as they are)
+nc: 1
+names: ['herd']

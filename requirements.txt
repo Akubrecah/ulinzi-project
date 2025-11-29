@@ -1,0 +1,7 @@
+streamlit
+Pillow
+torch --index-url https://download.pytorch.org/whl/cpu
+numpy
+pandas
+folium
+streamlit-folium
