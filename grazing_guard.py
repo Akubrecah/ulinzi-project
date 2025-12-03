@@ -4,19 +4,33 @@ import numpy as np
 import plotly.express as px
 from sklearn.ensemble import IsolationForest
 import time
-import africastalking
+import requests
+import json
 
 # --- SMS CONFIGURATION ---
-# Initialize Africa's Talking
-username = "sandbox"  # Use 'sandbox' for development in the test environment
-api_key = "R5nHlfS4m" # User provided key
-africastalking.initialize(username, api_key)
-sms = africastalking.SMS
+# SMS.to API
+API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2F1dGg6ODA4MC9hcGkvdjEvdXNlcnMvYXBpL2tleXMvZ2VuZXJhdGUiLCJpYXQiOjE3NjQ3NjA3ODEsIm5iZiI6MTc2NDc2MDc4MSwianRpIjoiTlJjMzR0U1RCM2VXcDN5WiIsInN1YiI6NDkxNjU2LCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.itrDi3f3d9dR7uOpNqE9heJyrSvjLg_xbzKMtMV4Kq0"
+URL = "https://api.sms.to/sms/send"
 
 def send_alert_sms(phone_number, message):
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    payload = {
+        "to": phone_number,
+        "message": message,
+        "sender_id": "ULINZI", # Sender ID (might be overwritten by free tier limitations)
+        "bypass_optout": True
+    }
+    
     try:
-        response = sms.send(message, [phone_number])
-        return True, response
+        response = requests.post(URL, json=payload, headers=headers)
+        if response.status_code == 200 or response.status_code == 201:
+            return True, response.json()
+        else:
+            return False, f"Error {response.status_code}: {response.text}"
     except Exception as e:
         return False, str(e)
 
@@ -74,7 +88,7 @@ def render_grazing_guard():
     st.sidebar.subheader("GrazingGuard Simulation")
     
     # SMS Settings
-    elder_phone = st.sidebar.text_input("Elder Phone Number:", value="+254700000000", help="Format: +254...")
+    elder_phone = st.sidebar.text_input("Elder Phone Number:", value="+254719299900", help="Verified number for testing")
     
     sim_mode = st.sidebar.radio("Herd Activity State:", ["Normal Grazing", "Active Raid Simulation"])
 
@@ -171,40 +185,61 @@ def render_grazing_guard():
 
     # --- Workflow Diagram ---
     with st.expander("How GrazingGuard Works (Human-in-the-Loop Workflow)"):
-        st.markdown("""
-        ```mermaid
-        graph TD
-            subgraph DATA_INPUT [1. Real-Time Data Collection]
-                A[GPS Tracker on Cattle] -->|Location/Speed| D[AI Model]
-                B[Satellite/Weather Data] -->|Drought Index| D
-                C[Historical Conflict Data] -->|Risk History| D
-            end
+        st.graphviz_chart("""
+        digraph {
+            rankdir=TB;
+            node [shape=box, style=filled, fillcolor=white];
+            
+            subgraph cluster_input {
+                label = "1. Real-Time Data Collection";
+                style=dashed;
+                A [label="GPS Tracker on Cattle"];
+                B [label="Satellite/Weather Data"];
+                C [label="Historical Conflict Data"];
+            }
 
-            subgraph AI_PROCESSING [2. AI Analysis]
-                D{Is Risk > 80%?}
-                D -->|No| E[Log Data & Continue Monitoring]
-                D -->|Yes| F[TRIGGER RED ALERT]
-            end
+            subgraph cluster_ai {
+                label = "2. AI Analysis";
+                style=dashed;
+                D [label="AI Model\\nIs Risk > 80%?", shape=diamond];
+                E [label="Log Data & Continue Monitoring"];
+                F [label="TRIGGER RED ALERT", style=filled, fillcolor="#ff4d4d", fontcolor=white];
+            }
 
-            subgraph HUMAN_LOOP [3. Human Verification Loop]
-                F -->|SMS/WhatsApp| G[Local Peace Elder]
-                G -->|Phone Call| H[Verify with Herder]
-                H -->|Feedback| I{Is it a Raid?}
-                
-                I -->|No - False Alarm| J[Mark as Safe]
-                J -->|Feedback Loop| D
-                note[False Alarms retrain the AI<br/>to be smarter next time] -.-> D
-                
-                I -->|Yes - Confirmed| K[ACTIVATE RESPONSE]
-            end
+            subgraph cluster_human {
+                label = "3. Human Verification Loop";
+                style=dashed;
+                G [label="Local Peace Elder", style=filled, fillcolor="#4d94ff", fontcolor=white];
+                H [label="Verify with Herder"];
+                I [label="Is it a Raid?", shape=diamond];
+                J [label="Mark as Safe"];
+                K [label="ACTIVATE RESPONSE", style=filled, fillcolor="#ff0000", fontcolor=white];
+            }
 
-            subgraph ACTION [4. Security Response]
-                K -->|Dispatch| L[Police/Anti-Stock Theft Unit]
-                K -->|Notify| M[Neighboring Communities]
-            end
+            subgraph cluster_action {
+                label = "4. Security Response";
+                style=dashed;
+                L [label="Police/Anti-Stock Theft Unit"];
+                M [label="Neighboring Communities"];
+            }
 
-            style F fill:#ff4d4d,stroke:#333,stroke-width:2px,color:white
-            style G fill:#4d94ff,stroke:#333,stroke-width:2px,color:white
-            style K fill:#ff0000,stroke:#333,stroke-width:4px,color:white
-        ```
+            A -> D [label="Location/Speed"];
+            B -> D [label="Drought Index"];
+            C -> D [label="Risk History"];
+
+            D -> E [label="No"];
+            D -> F [label="Yes"];
+
+            F -> G [label="SMS/WhatsApp"];
+            G -> H [label="Phone Call"];
+            H -> I [label="Feedback"];
+
+            I -> J [label="No - False Alarm"];
+            J -> D [label="Feedback Loop", style=dotted];
+            
+            I -> K [label="Yes - Confirmed"];
+
+            K -> L [label="Dispatch"];
+            K -> M [label="Notify"];
+        }
         """)
