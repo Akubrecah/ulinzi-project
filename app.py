@@ -10,6 +10,7 @@ import folium
 from streamlit_folium import st_folium
 from synthetic_data import generate_time_series_data, generate_live_update
 from lstm_model import train_model, predict_next
+from grazing_guard import render_grazing_guard
 
 # --- Configuration ---
 st.set_page_config(layout="wide", page_title="Ulinzi Project")
@@ -76,6 +77,13 @@ st.markdown(page_bg_img, unsafe_allow_html=True)
 
 # --- Sidebar Controls ---
 st.sidebar.header("Dashboard Controls")
+
+# Navigation
+app_mode = st.sidebar.radio("Navigate to:", ["Regional Dashboard", "GrazingGuard (Cattle Tracking)"])
+
+if app_mode == "GrazingGuard (Cattle Tracking)":
+    render_grazing_guard()
+    st.stop() # Stop execution of the rest of the script (Regional Dashboard)
 
 selected_location = st.sidebar.selectbox(
     "Choose a location to monitor:",
