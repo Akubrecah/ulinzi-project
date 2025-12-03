@@ -4,6 +4,21 @@ import numpy as np
 import plotly.express as px
 from sklearn.ensemble import IsolationForest
 import time
+import africastalking
+
+# --- SMS CONFIGURATION ---
+# Initialize Africa's Talking
+username = "sandbox"  # Use 'sandbox' for development in the test environment
+api_key = "R5nHlfS4m" # User provided key
+africastalking.initialize(username, api_key)
+sms = africastalking.SMS
+
+def send_alert_sms(phone_number, message):
+    try:
+        response = sms.send(message, [phone_number])
+        return True, response
+    except Exception as e:
+        return False, str(e)
 
 # --- 1. THE DATA SIMULATOR (Generating the Identity) ---
 def get_cattle_data(mode="Normal", num_cows=50):
@@ -57,6 +72,10 @@ def render_grazing_guard():
     # Sidebar Controls (Local to this module)
     st.sidebar.markdown("---")
     st.sidebar.subheader("GrazingGuard Simulation")
+    
+    # SMS Settings
+    elder_phone = st.sidebar.text_input("Elder Phone Number:", value="+254700000000", help="Format: +254...")
+    
     sim_mode = st.sidebar.radio("Herd Activity State:", ["Normal Grazing", "Active Raid Simulation"])
 
     # Generate Live Data based on selection
@@ -132,6 +151,19 @@ def render_grazing_guard():
                     st.markdown("### 🚓 RESPONSE ACTIVATED")
                     st.write("Dispatching ASTU Unit to Sector 4.")
                     st.write("Notifying Neighbors in Sector 5.")
+                    
+                    # Send SMS
+                    if elder_phone:
+                        with st.spinner("Sending SMS Alert..."):
+                            msg = "ULINZI ALERT: Confirmed Raid in Sector 4. ASTU Dispatched. Please secure livestock."
+                            success, resp = send_alert_sms(elder_phone, msg)
+                            if success:
+                                st.success(f"✅ SMS Alert sent to {elder_phone}")
+                                st.json(resp)
+                            else:
+                                st.error(f"❌ SMS Failed: {resp}")
+                    else:
+                        st.warning("⚠️ No phone number provided for SMS alert.")
         
         else:
             st.success("System Status: MONITORING")
