@@ -7,32 +7,66 @@ import time
 import requests
 import json
 
-# --- SMS CONFIGURATION ---
-# SMS.to API
-API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2F1dGg6ODA4MC9hcGkvdjEvdXNlcnMvYXBpL2tleXMvZ2VuZXJhdGUiLCJpYXQiOjE3NjQ3NjA3ODEsIm5iZiI6MTc2NDc2MDc4MSwianRpIjoiTlJjMzR0U1RCM2VXcDN5WiIsInN1YiI6NDkxNjU2LCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.itrDi3f3d9dR7uOpNqE9heJyrSvjLg_xbzKMtMV4Kq0"
-URL = "https://api.sms.to/sms/send"
+# --- SMS CONFIGURATION (TextBee) ---
+def send_alert_sms(api_key, device_id, phone_number, message):
+    if not api_key or not device_id:
+        return False, "Missing API Key or Device ID"
 
-def send_alert_sms(phone_number, message):
+    url = f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/send-sms"
+    
     headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+        "x-api-key": api_key,
+        "Content-Type": "application/json"
     }
+    
+    # TextBee expects an array of recipients
     payload = {
-        "to": phone_number,
-        "message": message,
-        "sender_id": "ULINZI", # Sender ID (might be overwritten by free tier limitations)
-        "bypass_optout": True
+        "recipients": [phone_number],
+        "message": message
     }
     
     try:
-        response = requests.post(URL, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200 or response.status_code == 201:
             return True, response.json()
         else:
             return False, f"Error {response.status_code}: {response.text}"
     except Exception as e:
         return False, str(e)
+
+def check_for_sms_reply(api_key, device_id, sender_phone):
+    if not api_key or not device_id:
+        return False, "Missing Credentials", None
+        
+    url = f"https://api.textbee.dev/api/v1/gateway/devices/{device_id}/get-received-sms"
+    headers = {"x-api-key": api_key}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            messages = data.get('data', [])
+            
+            # DEBUG: Return the raw messages to see what's happening
+            debug_info = [f"{m.get('sender')}: {m.get('message')}" for m in messages[:5]]
+            
+            # Look for recent messages from the sender
+            target_num = sender_phone.replace("+", "").replace(" ", "")[-9:] # Last 9 digits
+            
+            for msg in messages:
+                msg_sender = str(msg.get('sender', '')).replace("+", "").replace(" ", "")
+                msg_body = str(msg.get('message', '')).upper()
+                
+                # Check if sender matches and body has keywords
+                # Relaxed check: Check if target_num is in sender OR sender is in target_num
+                if target_num in msg_sender or msg_sender in target_num:
+                    if any(keyword in msg_body for keyword in ["YES", "CONFIRM", "OK", "RAID", "APPROVED"]):
+                        return True, msg.get('message'), debug_info
+            return False, "No matching reply found.", debug_info
+        else:
+            return False, f"API Error: {response.text}", None
+    except Exception as e:
+        return False, str(e), None
 
 # --- 1. THE DATA SIMULATOR (Generating the Identity) ---
 def get_cattle_data(mode="Normal", num_cows=50):
@@ -78,34 +112,54 @@ def train_model():
     return model
 
 def render_grazing_guard():
-    model = train_model()
-
     # --- 3. STREAMLIT DASHBOARD UI ---
     st.title("🛡️ GrazingGuard - Cattle Tracking")
     
+    # Initialize Session State for Workflow
+    if 'incident_state' not in st.session_state:
+        st.session_state.incident_state = "MONITORING" # MONITORING, THREAT_DETECTED, WAITING_FOR_CHIEF, DISPATCHED
+    if 'log_messages' not in st.session_state:
+        st.session_state.log_messages = []
+
+    def add_log(message, type="info"):
+        timestamp = time.strftime("%H:%M:%S")
+        st.session_state.log_messages.insert(0, {"time": timestamp, "msg": message, "type": type})
+
     # Sidebar Controls (Local to this module)
     st.sidebar.markdown("---")
     st.sidebar.subheader("GrazingGuard Simulation")
     
     # SMS Settings
+    st.sidebar.markdown("### 📲 TextBee Settings")
+    textbee_api_key = st.sidebar.text_input("TextBee API Key", value="901124e8-7fca-4468-85a8-075ef29dd819", type="password", help="Get this from your TextBee Dashboard")
+    textbee_device_id = st.sidebar.text_input("TextBee Device ID", value="69312c2dd3fdd9bd6c54dfc7", help="The ID of your Android device in TextBee")
     elder_phone = st.sidebar.text_input("Elder Phone Number:", value="+254719299900", help="Verified number for testing")
     
     sim_mode = st.sidebar.radio("Herd Activity State:", ["Normal Grazing", "Active Raid Simulation"])
 
+    # Reset state if simulation mode changes to Normal
+    if sim_mode == "Normal Grazing" and st.session_state.incident_state != "MONITORING":
+        st.session_state.incident_state = "MONITORING"
+        st.session_state.log_messages = []
+
     # Generate Live Data based on selection
     live_data = get_cattle_data("Normal" if sim_mode == "Normal Grazing" else "Raid")
+    model = train_model()
 
     # Run AI Prediction
-    # -1 is Anomaly (Raid), 1 is Normal
     features = live_data[['speed_kmh', 'hour_of_day']]
     live_data['anomaly_score'] = model.predict(features)
     live_data['status'] = live_data['anomaly_score'].apply(lambda x: 'Safe' if x == 1 else 'THREAT DETECTED')
     
     # Detect if ANY cow is showing raid identity
     raid_detected = -1 in live_data['anomaly_score'].values
+    
+    if raid_detected and st.session_state.incident_state == "MONITORING":
+        st.session_state.incident_state = "THREAT_DETECTED"
+        add_log("AI detected anomalous grazing pattern (High Velocity Vector)", "error")
 
     # --- MAIN LAYOUT ---
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([2, 1])
 
     with col1:
         st.subheader("📍 Live Geospatial Tracking (West Pokot Sector 4)")
@@ -118,7 +172,7 @@ def render_grazing_guard():
             color="status",
             color_discrete_map={"Safe": "#00CC96", "THREAT DETECTED": "#EF553B"},
             zoom=12, 
-            height=600,
+            height=500,
             size="speed_kmh", # Faster cows appear larger
             hover_data=["speed_kmh", "id"]
         )
@@ -127,61 +181,107 @@ def render_grazing_guard():
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.subheader("📡 Threat Analysis")
+        st.subheader("📡 Command Center")
         
-        # Metrics
+        # Metrics Row
+        m1, m2 = st.columns(2)
         avg_speed = live_data['speed_kmh'].mean()
-        st.metric("Avg Herd Speed", f"{avg_speed:.1f} km/h", delta_color="inverse")
+        m1.metric("Avg Speed", f"{avg_speed:.1f} km/h", delta="Normal" if avg_speed < 5 else "High", delta_color="inverse")
         
         current_hour = live_data['hour_of_day'].iloc[0]
-        st.metric("Time of Activity", f"{current_hour}:00 hrs")
+        m2.metric("Time", f"{current_hour}:00 hrs")
 
-        st.markdown("---")
+        st.divider()
         
-        # --- THE HUMAN-IN-THE-LOOP LOGIC ---
+        # --- WORKFLOW STATE MACHINE ---
         
-        if raid_detected:
-            st.error("🚨 PRE-RAID IDENTITY DETECTED")
-            st.markdown("Identity Signature:\n* High Velocity (>12km/h)\n* Anomalous Time (02:00)\n* Vector Movement")
+        if st.session_state.incident_state == "MONITORING":
+            st.success("✅ System Status: MONITORING")
+            st.caption("No anomalies detected in current grazing patterns.")
             
-            st.markdown("---")
+        elif st.session_state.incident_state == "THREAT_DETECTED":
+            st.error("🚨 THREAT DETECTED")
+            st.markdown("**AI Signature:** High Velocity (>12km/h) at 02:00 hrs.")
+            
+            st.warning("Action Required: Verify with Area Chief")
+            
+            if st.button("📲 Send SMS Alert to Chief"):
+                if elder_phone and textbee_api_key and textbee_device_id:
+                    with st.spinner("Sending SMS via TextBee..."):
+                        msg = "ULINZI ALERT: Suspected Raid in Sector 4. Please CONFIRM status immediately."
+                        success, resp = send_alert_sms(textbee_api_key, textbee_device_id, elder_phone, msg)
+                        if success:
+                            st.session_state.incident_state = "WAITING_FOR_CHIEF"
+                            add_log(f"SMS Alert sent to Chief ({elder_phone})", "warning")
+                            st.rerun()
+                        else:
+                            st.error(f"SMS Failed: {resp}")
+                else:
+                    st.error("Please enter Phone Number, TextBee API Key, and Device ID.")
 
-            st.info("🔒 HUMAN VERIFICATION REQUIRED")
-            st.write("Alert sent to: Elder Musa (Kacheliba)")
+        elif st.session_state.incident_state == "WAITING_FOR_CHIEF":
+            st.info("⏳ Waiting for Chief's Confirmation...")
+            st.caption("Please wait for the Chief to reply or call back.")
             
-            # The Escalation Timer (Visual only for demo)
-            with st.spinner("Waiting for Elder response... (Auto-escalation in 4:59)"):
-                time.sleep(1) # Tiny pause for effect
+            with st.status("Verification in Progress", expanded=True):
+                st.write("SMS Status: Sent ✅")
+                st.write("Awaiting feedback...")
+                
+                c1, c2 = st.columns(2)
+                if c1.button("✅ Chief Confirmed: RAID"):
+                    st.session_state.incident_state = "READY_TO_DISPATCH"
+                    add_log("Chief confirmed raid activity via phone.", "error")
+                    st.rerun()
+                
+                if c2.button("❌ False Alarm"):
+                    st.session_state.incident_state = "MONITORING"
+                    add_log("Chief marked as False Alarm.", "success")
+                    st.rerun()
+                
+                st.markdown("---")
+                if st.button("🔄 Check for SMS Reply (TextBee)"):
+                    with st.spinner("Checking inbox for 'CONFIRM' or 'YES'..."):
+                        found, result, debug_msgs = check_for_sms_reply(textbee_api_key, textbee_device_id, elder_phone)
+                        
+                        if found:
+                            st.success(f"📩 Reply Received: '{result}'")
+                            st.session_state.incident_state = "READY_TO_DISPATCH"
+                            add_log(f"Chief replied via SMS: {result}", "error")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.warning(f"Status: {result}")
+                            if debug_msgs:
+                                with st.expander("Debug: Last 5 Messages Received"):
+                                    for m in debug_msgs:
+                                        st.write(m)
+
+        elif st.session_state.incident_state == "READY_TO_DISPATCH":
+            st.error("⚠️ RAID CONFIRMED - AUTHORIZED TO DISPATCH")
             
-            # Interaction Buttons
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("✅ Verify: SAFE"):
-                    st.success("System Stand-Down. False Alarm Logged.")
-                    st.balloons() # Fun visual for 'Success'
-            with col_b:
-                if st.button("⚠️ Verify: RAID"):
-                    st.toast("🚀 POLICE DISPATCHED!", icon="🚓")
-                    st.markdown("### 🚓 RESPONSE ACTIVATED")
-                    st.write("Dispatching ASTU Unit to Sector 4.")
-                    st.write("Notifying Neighbors in Sector 5.")
-                    
-                    # Send SMS
-                    if elder_phone:
-                        with st.spinner("Sending SMS Alert..."):
-                            msg = "ULINZI ALERT: Confirmed Raid in Sector 4. ASTU Dispatched. Please secure livestock."
-                            success, resp = send_alert_sms(elder_phone, msg)
-                            if success:
-                                st.success(f"✅ SMS Alert sent to {elder_phone}")
-                                st.json(resp)
-                            else:
-                                st.error(f"❌ SMS Failed: {resp}")
-                    else:
-                        st.warning("⚠️ No phone number provided for SMS alert.")
-        
-        else:
-            st.success("System Status: MONITORING")
-            st.markdown("No anomalies detected in current grazing patterns.")
+            if st.button("🚓 DISPATCH POLICE UNITS", type="primary", use_container_width=True):
+                st.session_state.incident_state = "DISPATCHED"
+                add_log("ASTU Unit dispatched to Sector 4.", "error")
+                st.rerun()
+
+        elif st.session_state.incident_state == "DISPATCHED":
+            st.success("🚀 RESPONSE IN PROGRESS")
+            st.markdown("### 🚓 Units En Route")
+            st.write("Estimated Time of Arrival: 15 mins")
+            
+            if st.button("Reset System"):
+                st.session_state.incident_state = "MONITORING"
+                st.rerun()
+
+    # --- Activity Log ---
+    with st.expander("📜 Incident Activity Log", expanded=True):
+        for log in st.session_state.log_messages:
+            if log['type'] == 'error':
+                st.error(f"[{log['time']}] {log['msg']}")
+            elif log['type'] == 'warning':
+                st.warning(f"[{log['time']}] {log['msg']}")
+            else:
+                st.info(f"[{log['time']}] {log['msg']}")
 
     # --- Workflow Diagram ---
     with st.expander("How GrazingGuard Works (Human-in-the-Loop Workflow)"):
