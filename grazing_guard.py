@@ -34,7 +34,9 @@ def send_alert_sms(api_key, device_id, phone_number, message):
     except Exception as e:
         return False, str(e)
 
-def check_for_sms_reply(api_key, device_id, sender_phone):
+from datetime import datetime, timezone
+
+def check_for_sms_reply(api_key, device_id, sender_phone, min_timestamp=None):
     if not api_key or not device_id:
         return False, "Missing Credentials", None
         
@@ -48,7 +50,7 @@ def check_for_sms_reply(api_key, device_id, sender_phone):
             messages = data.get('data', [])
             
             # DEBUG: Return the raw messages to see what's happening
-            debug_info = [f"{m.get('sender')}: {m.get('message')}" for m in messages[:5]]
+            debug_info = [f"[{m.get('receivedAt')}] {m.get('sender')}: {m.get('message')}" for m in messages[:5]]
             
             # Look for recent messages from the sender
             target_num = sender_phone.replace("+", "").replace(" ", "")[-9:] # Last 9 digits
@@ -56,13 +58,24 @@ def check_for_sms_reply(api_key, device_id, sender_phone):
             for msg in messages:
                 msg_sender = str(msg.get('sender', '')).replace("+", "").replace(" ", "")
                 msg_body = str(msg.get('message', '')).upper()
+                msg_time_str = msg.get('receivedAt')
                 
+                # Parse timestamp
+                try:
+                    # Handle ISO format with Z
+                    msg_time = datetime.fromisoformat(msg_time_str.replace("Z", "+00:00"))
+                except:
+                    continue # Skip if invalid time format
+
+                # Check if message is newer than the alert
+                if min_timestamp and msg_time <= min_timestamp:
+                    continue
+
                 # Check if sender matches and body has keywords
-                # Relaxed check: Check if target_num is in sender OR sender is in target_num
                 if target_num in msg_sender or msg_sender in target_num:
                     if any(keyword in msg_body for keyword in ["YES", "CONFIRM", "OK", "RAID", "APPROVED"]):
                         return True, msg.get('message'), debug_info
-            return False, "No matching reply found.", debug_info
+            return False, "No new matching reply found.", debug_info
         else:
             return False, f"API Error: {response.text}", None
     except Exception as e:
@@ -120,6 +133,8 @@ def render_grazing_guard():
         st.session_state.incident_state = "MONITORING" # MONITORING, THREAT_DETECTED, WAITING_FOR_CHIEF, DISPATCHED
     if 'log_messages' not in st.session_state:
         st.session_state.log_messages = []
+    if 'alert_sent_time' not in st.session_state:
+        st.session_state.alert_sent_time = None
 
     def add_log(message, type="info"):
         timestamp = time.strftime("%H:%M:%S")
@@ -131,8 +146,10 @@ def render_grazing_guard():
     
     # SMS Settings
     st.sidebar.markdown("### 📲 TextBee Settings")
-    textbee_api_key = st.sidebar.text_input("TextBee API Key", value="901124e8-7fca-4468-85a8-075ef29dd819", type="password", help="Get this from your TextBee Dashboard")
-    textbee_device_id = st.sidebar.text_input("TextBee Device ID", value="69312c2dd3fdd9bd6c54dfc7", help="The ID of your Android device in TextBee")
+    # Hardcoded credentials as requested to hide them from UI
+    TEXTBEE_API_KEY = "901124e8-7fca-4468-85a8-075ef29dd819"
+    TEXTBEE_DEVICE_ID = "69312c2dd3fdd9bd6c54dfc7"
+    
     elder_phone = st.sidebar.text_input("Elder Phone Number:", value="+254719299900", help="Verified number for testing")
     
     sim_mode = st.sidebar.radio("Herd Activity State:", ["Normal Grazing", "Active Raid Simulation"])
@@ -206,18 +223,19 @@ def render_grazing_guard():
             st.warning("Action Required: Verify with Area Chief")
             
             if st.button("📲 Send SMS Alert to Chief"):
-                if elder_phone and textbee_api_key and textbee_device_id:
+                if elder_phone:
                     with st.spinner("Sending SMS via TextBee..."):
                         msg = "ULINZI ALERT: Suspected Raid in Sector 4. Please CONFIRM status immediately."
-                        success, resp = send_alert_sms(textbee_api_key, textbee_device_id, elder_phone, msg)
+                        success, resp = send_alert_sms(TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, elder_phone, msg)
                         if success:
                             st.session_state.incident_state = "WAITING_FOR_CHIEF"
+                            st.session_state.alert_sent_time = datetime.now(timezone.utc)
                             add_log(f"SMS Alert sent to Chief ({elder_phone})", "warning")
                             st.rerun()
                         else:
                             st.error(f"SMS Failed: {resp}")
                 else:
-                    st.error("Please enter Phone Number, TextBee API Key, and Device ID.")
+                    st.error("Please enter Phone Number.")
 
         elif st.session_state.incident_state == "WAITING_FOR_CHIEF":
             st.info("⏳ Waiting for Chief's Confirmation...")
@@ -239,22 +257,32 @@ def render_grazing_guard():
                     st.rerun()
                 
                 st.markdown("---")
-                if st.button("🔄 Check for SMS Reply (TextBee)"):
-                    with st.spinner("Checking inbox for 'CONFIRM' or 'YES'..."):
-                        found, result, debug_msgs = check_for_sms_reply(textbee_api_key, textbee_device_id, elder_phone)
-                        
-                        if found:
-                            st.success(f"📩 Reply Received: '{result}'")
-                            st.session_state.incident_state = "READY_TO_DISPATCH"
-                            add_log(f"Chief replied via SMS: {result}", "error")
-                            time.sleep(2)
-                            st.rerun()
+                
+                # Auto-Polling Logic
+                st.write("🔄 **Live Status:** Listening for reply...")
+                
+                # Perform the check
+                found, result, debug_msgs = check_for_sms_reply(TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, elder_phone, st.session_state.alert_sent_time)
+                
+                if found:
+                    st.success(f"📩 Reply Received: '{result}'")
+                    st.session_state.incident_state = "READY_TO_DISPATCH"
+                    add_log(f"Chief replied via SMS: {result}", "error")
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    # Show debug info in an expander (collapsed by default)
+                    with st.expander("Debug: Incoming Messages"):
+                        if debug_msgs:
+                            for m in debug_msgs:
+                                st.write(m)
                         else:
-                            st.warning(f"Status: {result}")
-                            if debug_msgs:
-                                with st.expander("Debug: Last 5 Messages Received"):
-                                    for m in debug_msgs:
-                                        st.write(m)
+                            st.write("No messages fetched.")
+                    
+                    # Wait and Rerun to create a polling loop
+                    time.sleep(5)
+                    st.rerun()
 
         elif st.session_state.incident_state == "READY_TO_DISPATCH":
             st.error("⚠️ RAID CONFIRMED - AUTHORIZED TO DISPATCH")
