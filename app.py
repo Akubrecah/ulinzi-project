@@ -114,6 +114,10 @@ selected_location = st.sidebar.selectbox(
 )
 
 # Determine map center and zoom based on selection
+# --- Data Processing for Display ---
+latest_data = st.session_state.data.sort_values('Date').groupby('Location').tail(1)
+latest_data = latest_data.set_index('Location')
+
 # Coordinates for the counties (approximate centers)
 LOCATION_COORDS = {
     "Turkana County": [3.1218, 35.5872],
