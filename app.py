@@ -45,50 +45,97 @@ if 'data' not in st.session_state:
                 st.session_state.models[loc] = model
                 st.session_state.scalers[loc] = scaler
 
-# --- Background Image (Optional - keeping it for style if needed, but map covers main area) ---
-# You might want to remove this if it interferes with the map, but let's keep it for the sidebar/header styling
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# image_path = os.path.join(script_dir, "base_map.png") # Not used for map anymore
-# img = get_resized_img_as_base64(image_path)
-
-page_bg_img = f"""
-<style>
-/* 
-[data-testid="stAppViewContainer"] {{
-background-image: url("data:image/png;base64,IMG_PLACEHOLDER");
-background-size: cover;
-background-position: top left;
-background-repeat: no-repeat;
-background-attachment: local;
-}}
-*/
-
-[data-testid="stHeader"] {{
-background: rgba(0,0,0,0);
-}}
-
-[data-testid="stToolbar"] {{
-right: 2rem;
-}}
-</style>
-"""
-# st.markdown(page_bg_img.replace("IMG_PLACEHOLDER", img), unsafe_allow_html=True) 
-st.markdown(page_bg_img, unsafe_allow_html=True)
+# --- CUSTOM CSS (NSA THEME) ---
+st.markdown("""
+    <style>
+        /* Force Dark Background */
+        .stApp {
+            background-color: #0e1117;
+            color: #00ff41; /* Hacker Green */
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        /* Headings */
+        h1, h2, h3 {
+            color: #00ff41 !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 1px solid #00ff41;
+            padding-bottom: 10px;
+        }
+        
+        /* Metrics */
+        div[data-testid="stMetricValue"] {
+            color: #00ff41 !important;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 5px #00ff41;
+        }
+        div[data-testid="stMetricLabel"] {
+            color: #00cc96 !important;
+        }
+        
+        /* Buttons (Tactical Style) */
+        div.stButton > button {
+            background-color: #000000;
+            color: #00ff41;
+            border: 1px solid #00ff41;
+            border-radius: 0px;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:hover {
+            background-color: #00ff41;
+            color: #000000;
+            box-shadow: 0 0 10px #00ff41;
+        }
+        
+        /* Sidebar */
+        section[data-testid="stSidebar"] {
+            background-color: #050505;
+            border-right: 1px solid #333;
+        }
+        
+        /* Radio Buttons */
+        div[role="radiogroup"] label {
+            color: #00ff41 !important;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- Sidebar Controls ---
 st.sidebar.header("Dashboard Controls")
+
+# Global Location Selector (Available for both modes)
+selected_location = st.sidebar.selectbox(
+    "Choose a location to monitor:",
+    st.session_state.locations
+)
+
+# Determine map center and zoom based on selection
+# Coordinates for the counties (approximate centers)
+LOCATION_COORDS = {
+    "Turkana County": [3.1218, 35.5872],
+    "West Pokot County": [1.4942, 35.0472],
+    "Baringo County": [0.4667, 35.9667],
+    "Elgeyo Marakwet": [1.0498, 35.4782],
+}
+
+if selected_location in LOCATION_COORDS:
+    map_center = LOCATION_COORDS[selected_location]
+    zoom_level = 9
+else:
+    map_center = [1.5, 36.0] # Default Kenya center
+    zoom_level = 7
 
 # Navigation
 app_mode = st.sidebar.radio("Navigate to:", ["Regional Dashboard", "GrazingGuard (Cattle Tracking)"])
 
 if app_mode == "GrazingGuard (Cattle Tracking)":
-    render_grazing_guard()
+    # Pass the selected region and its coordinates to the module
+    render_grazing_guard(selected_location, map_center)
     st.stop() # Stop execution of the rest of the script (Regional Dashboard)
-
-selected_location = st.sidebar.selectbox(
-    "Choose a location to monitor:",
-    st.session_state.locations
-)
 
 threat_filter = st.sidebar.slider(
     "Filter by Threat Level:",
@@ -98,40 +145,14 @@ threat_filter = st.sidebar.slider(
     help="Set the minimum threat level to display."
 )
 
-if st.sidebar.button("Simulate Live Update"):
-    new_data = generate_live_update(st.session_state.locations)
-    st.session_state.data = pd.concat([st.session_state.data, new_data], ignore_index=True)
-    st.sidebar.success("Data updated!")
+# Create Folium Map with Dark Theme
+m = folium.Map(location=map_center, zoom_start=zoom_level, tiles="cartodb dark_matter")
 
-# --- Data Processing for Display ---
-latest_data = st.session_state.data.sort_values('Date').groupby('Location').tail(1)
-latest_data = latest_data.set_index('Location')
-
-# --- Map Configuration ---
-# Coordinates for the counties (approximate centers)
-LOCATION_COORDS = {
-    "Turkana County": [3.1218, 35.5872],
-    "West Pokot County": [1.4942, 35.0472],
-    "Baringo County": [0.4667, 35.9667],
-    "Elgeyo Marakwet": [1.0498, 35.4782],
-}
-
-# Determine map center and zoom
-if selected_location in LOCATION_COORDS:
-    map_center = LOCATION_COORDS[selected_location]
-    zoom_level = 9
-else:
-    map_center = [1.5, 36.0] # Default Kenya center
-    zoom_level = 7
-
-# Create Folium Map
-m = folium.Map(location=map_center, zoom_start=zoom_level, tiles="OpenStreetMap")
-
-# Add Esri World Imagery (Satellite)
+# Add Esri World Imagery (Satellite) - Optional Overlay
 folium.TileLayer(
     tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attr='Esri',
-    name='Esri Satellite',
+    name='Satellite View',
     overlay=False,
     control=True
 ).add_to(m)
@@ -160,7 +181,7 @@ for location, coords in LOCATION_COORDS.items():
         elif current_threat == 3:
             color = "orange"
         elif current_threat == 2:
-            color = "beige" # Folium doesn't have 'yellow' marker, 'beige' is close or use custom icon
+            color = "lightgray" 
         else:
             color = "green"
             
@@ -179,7 +200,7 @@ for location, coords in LOCATION_COORDS.items():
         ).add_to(m)
 
 # --- Main Dashboard Area ---
-st.title("Ulinzi Project AI Dashboard", anchor=False)
+st.title("ULINZI PROJECT // REGIONAL COMMAND", anchor=False)
 
 col1, col2 = st.columns([2, 1])
 
@@ -193,13 +214,14 @@ with col2:
     # Historical Chart
     loc_history = st.session_state.data[st.session_state.data['Location'] == selected_location]
     
-    chart = alt.Chart(loc_history).mark_line(point=True).encode(
-        x='Date:T',
-        y='Threat_Level:Q',
+    chart = alt.Chart(loc_history).mark_line(point=True, color='#00ff41').encode(
+        x=alt.X('Date:T', axis=alt.Axis(labelColor='#00ff41', titleColor='#00ff41')),
+        y=alt.Y('Threat_Level:Q', axis=alt.Axis(labelColor='#00ff41', titleColor='#00ff41')),
         tooltip=['Date', 'Threat_Level', 'Incident_Count']
     ).properties(
-        title=f"Threat Level History",
-        height=250
+        title=alt.TitleParams(text=f"THREAT LEVEL HISTORY", color='#00ff41'),
+        height=250,
+        background='#0e1117'
     ).interactive()
     
     st.altair_chart(chart, use_container_width=True)

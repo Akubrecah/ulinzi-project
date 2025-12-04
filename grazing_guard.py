@@ -82,10 +82,10 @@ def check_for_sms_reply(api_key, device_id, sender_phone, min_timestamp=None):
         return False, str(e), None
 
 # --- 1. THE DATA SIMULATOR (Generating the Identity) ---
-def get_cattle_data(mode="Normal", num_cows=50):
-    # Base coordinates for West Pokot, Kenya
-    base_lat = 1.433
-    base_lon = 35.115
+def get_cattle_data(mode="Normal", num_cows=50, center_lat=1.433, center_lon=35.115):
+    # Use dynamic center coordinates
+    base_lat = center_lat
+    base_lon = center_lon
     
     if mode == "Normal":
         # Cows grazing: Slow speed, random clustered movement, Day time
@@ -124,9 +124,77 @@ def train_model():
     model.fit(X_train)
     return model
 
-def render_grazing_guard():
-    # --- 3. STREAMLIT DASHBOARD UI ---
-    st.title("🛡️ GrazingGuard - Cattle Tracking")
+def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]):
+    # --- 3. STREAMLIT DASHBOARD UI (NSA THEME) ---
+    
+    # Custom CSS for Tactical/NSA Look
+    st.markdown("""
+        <style>
+            /* Force Dark Background */
+            .stApp {
+                background-color: #0e1117;
+                color: #00ff41; /* Hacker Green */
+                font-family: 'Courier New', Courier, monospace;
+            }
+            
+            /* Headings */
+            h1, h2, h3 {
+                color: #00ff41 !important;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                border-bottom: 1px solid #00ff41;
+                padding-bottom: 10px;
+            }
+            
+            /* Metrics */
+            div[data-testid="stMetricValue"] {
+                color: #00ff41 !important;
+                font-family: 'Courier New', monospace;
+                text-shadow: 0 0 5px #00ff41;
+            }
+            div[data-testid="stMetricLabel"] {
+                color: #00cc96 !important;
+            }
+            
+            /* Buttons (Tactical Style) */
+            div.stButton > button {
+                background-color: #000000;
+                color: #00ff41;
+                border: 1px solid #00ff41;
+                border-radius: 0px;
+                font-family: 'Courier New', monospace;
+                text-transform: uppercase;
+                transition: all 0.3s ease;
+            }
+            div.stButton > button:hover {
+                background-color: #00ff41;
+                color: #000000;
+                box-shadow: 0 0 10px #00ff41;
+            }
+            
+            /* Alerts/Status Containers */
+            div[data-testid="stStatusWidget"] {
+                background-color: #000000;
+                border: 1px solid #00ff41;
+            }
+            
+            /* Expander */
+            .streamlit-expanderHeader {
+                background-color: #1c1c1c;
+                color: #00ff41 !important;
+                border: 1px solid #333;
+            }
+            
+            /* Sidebar */
+            section[data-testid="stSidebar"] {
+                background-color: #050505;
+                border-right: 1px solid #333;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.title("🛡️ GRAZING GUARD // TACTICAL OPS")
+    st.markdown(f"**SYSTEM STATUS:** `ONLINE` | **SECTOR:** `{region_name.upper()}` | **ENCRYPTION:** `AES-256`")
     
     # Initialize Session State for Workflow
     if 'incident_state' not in st.session_state:
@@ -160,7 +228,12 @@ def render_grazing_guard():
         st.session_state.log_messages = []
 
     # Generate Live Data based on selection
-    live_data = get_cattle_data("Normal" if sim_mode == "Normal Grazing" else "Raid")
+    # Use the passed region_coords (lat, lon)
+    live_data = get_cattle_data(
+        "Normal" if sim_mode == "Normal Grazing" else "Raid", 
+        center_lat=region_coords[0], 
+        center_lon=region_coords[1]
+    )
     model = train_model()
 
     # Run AI Prediction
@@ -179,7 +252,7 @@ def render_grazing_guard():
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("📍 Live Geospatial Tracking (West Pokot Sector 4)")
+        st.subheader(f"📍 LIVE GEOSPATIAL TRACKING ({region_name.upper()})")
         
         # Using Plotly for the Map
         fig = px.scatter_mapbox(
@@ -187,13 +260,13 @@ def render_grazing_guard():
             lat="lat", 
             lon="lon", 
             color="status",
-            color_discrete_map={"Safe": "#00CC96", "THREAT DETECTED": "#EF553B"},
+            color_discrete_map={"Safe": "#00FF41", "THREAT DETECTED": "#FF0000"}, # Neon Green / Neon Red
             zoom=12, 
             height=500,
             size="speed_kmh", # Faster cows appear larger
             hover_data=["speed_kmh", "id"]
         )
-        fig.update_layout(mapbox_style="open-street-map")
+        fig.update_layout(mapbox_style="carto-darkmatter") # Dark Theme
         fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         st.plotly_chart(fig, use_container_width=True)
 
@@ -225,7 +298,7 @@ def render_grazing_guard():
             if st.button("📲 Send SMS Alert to Chief"):
                 if elder_phone:
                     with st.spinner("Sending SMS via TextBee..."):
-                        msg = "ULINZI ALERT: Suspected Raid in Sector 4. Please CONFIRM status immediately."
+                        msg = f"ULINZI ALERT: Suspected Raid in {region_name}. Please CONFIRM status immediately."
                         success, resp = send_alert_sms(TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, elder_phone, msg)
                         if success:
                             st.session_state.incident_state = "WAITING_FOR_CHIEF"
@@ -312,62 +385,72 @@ def render_grazing_guard():
                 st.info(f"[{log['time']}] {log['msg']}")
 
     # --- Workflow Diagram ---
-    with st.expander("How GrazingGuard Works (Human-in-the-Loop Workflow)"):
+    with st.expander("SYSTEM ARCHITECTURE // WORKFLOW"):
         st.graphviz_chart("""
         digraph {
+            bgcolor="#0e1117";
             rankdir=TB;
-            node [shape=box, style=filled, fillcolor=white];
+            node [shape=box, style="filled,rounded", fillcolor="#000000", color="#00ff41", fontcolor="#00ff41", fontname="Courier New"];
+            edge [color="#00ff41", fontcolor="#00ff41", fontname="Courier New"];
             
             subgraph cluster_input {
-                label = "1. Real-Time Data Collection";
+                label = "1. DATA INGESTION";
+                color="#333";
+                fontcolor="#00ff41";
                 style=dashed;
-                A [label="GPS Tracker on Cattle"];
-                B [label="Satellite/Weather Data"];
-                C [label="Historical Conflict Data"];
+                A [label="GPS TRACKER"];
+                B [label="SAT DATA"];
+                C [label="INTEL DB"];
             }
 
             subgraph cluster_ai {
-                label = "2. AI Analysis";
+                label = "2. THREAT ANALYSIS";
+                color="#333";
+                fontcolor="#00ff41";
                 style=dashed;
-                D [label="AI Model\\nIs Risk > 80%?", shape=diamond];
-                E [label="Log Data & Continue Monitoring"];
-                F [label="TRIGGER RED ALERT", style=filled, fillcolor="#ff4d4d", fontcolor=white];
+                D [label="AI MODEL\\nRISK > 80%?", shape=diamond];
+                E [label="LOG & MONITOR"];
+                F [label="RED ALERT", fillcolor="#FF0000", fontcolor="black"];
             }
 
             subgraph cluster_human {
-                label = "3. Human Verification Loop";
+                label = "3. HUMAN VERIFICATION";
+                color="#333";
+                fontcolor="#00ff41";
                 style=dashed;
-                G [label="Local Peace Elder", style=filled, fillcolor="#4d94ff", fontcolor=white];
-                H [label="Verify with Herder"];
-                I [label="Is it a Raid?", shape=diamond];
-                J [label="Mark as Safe"];
-                K [label="ACTIVATE RESPONSE", style=filled, fillcolor="#ff0000", fontcolor=white];
+                G [label="PEACE ELDER", fillcolor="#00ff41", fontcolor="black"];
+                H [label="VERIFY"];
+                I [label="CONFIRMED?", shape=diamond];
+                J [label="FALSE ALARM"];
+                K [label="ACTIVATE", fillcolor="#FF0000", fontcolor="black"];
             }
 
             subgraph cluster_action {
-                label = "4. Security Response";
+                label = "4. TACTICAL RESPONSE";
+                color="#333";
+                fontcolor="#00ff41";
                 style=dashed;
-                L [label="Police/Anti-Stock Theft Unit"];
-                M [label="Neighboring Communities"];
+                L [label="ASTU UNIT"];
+                M [label="COMMUNITY"];
             }
 
-            A -> D [label="Location/Speed"];
-            B -> D [label="Drought Index"];
-            C -> D [label="Risk History"];
+            A -> D;
+            B -> D;
+            C -> D;
 
-            D -> E [label="No"];
-            D -> F [label="Yes"];
+            D -> E [label="NO"];
+            D -> F [label="YES"];
 
-            F -> G [label="SMS/WhatsApp"];
-            G -> H [label="Phone Call"];
-            H -> I [label="Feedback"];
+            F -> G [label="SMS"];
+            G -> H;
+            H -> I;
 
-            I -> J [label="No - False Alarm"];
-            J -> D [label="Feedback Loop", style=dotted];
+            I -> J [label="NO"];
+            J -> D [style=dotted];
             
-            I -> K [label="Yes - Confirmed"];
+            I -> K [label="YES"];
 
-            K -> L [label="Dispatch"];
-            K -> M [label="Notify"];
+            K -> L [label="DISPATCH"];
+            K -> M [label="NOTIFY"];
         }
         """)
