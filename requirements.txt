@@ -8,3 +8,6 @@ streamlit-folium
 plotly
 scikit-learn
 requests
+extra-streamlit-components
+fastapi
+uvicorn

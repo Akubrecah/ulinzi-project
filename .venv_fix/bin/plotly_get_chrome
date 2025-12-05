@@ -1,0 +1,10 @@
+#!/bin/sh
+'''exec' "/run/media/akubrecah/dc953f05-8dc3-429c-862e-3224c5f34f37/NIRU HACKATHON 2025/ulinzi-project/.venv_fix/bin/python3" "$0" "$@"
+' '''
+# -*- coding: utf-8 -*-
+import re
+import sys
+from plotly.io._kaleido import plotly_get_chrome
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.exit(plotly_get_chrome())

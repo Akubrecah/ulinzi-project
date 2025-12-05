@@ -48,38 +48,55 @@ A specialized module for real-time tracking of individual cattle herds.
 
 ---
 
-## 📦 Installation & Setup
-
 ### Prerequisites
 -   Python 3.10 or higher.
 -   An Android phone with the **TextBee** app installed (for SMS features).
 
-### Step 1: Clone the Repository
-```bash
-git clone https://github.com/yourusername/ulinzi-project.git
-cd ulinzi-project
-```
+### 🛠️ Installation & Setup
 
-### Step 2: Create a Virtual Environment
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/your-repo/ulinzi-project.git
+    cd ulinzi-project
+    ```
 
-### Step 3: Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+2.  **Create Virtual Environment**
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
 
-### Step 4: Configure TextBee (Optional for SMS)
-To enable real SMS alerts:
-1.  Download **TextBee** on your Android phone.
+3.  **Install Dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+## 🚀 Usage
+
+The system is split into a **Backend API** and a **Frontend Dashboard**. You need to run both in separate terminals.
+
+### Terminal 1: Start Backend
+```bash
+source .venv/bin/activate
+uvicorn backend.main:app --reload
+```
+*Server will start at `http://localhost:8000`*
+
+### Terminal 2: Start Frontend
+```bash
+source .venv/bin/activate
+streamlit run frontend/app.py
+```
+*Dashboard will open at `http://localhost:8501`*
+
+## 🔑 Login Credentials
+- **Username:** `admin`
+- **Password:** `niruhack123`
 2.  Get your `API Key` and `Device ID` from the app.
 3.  Update `grazing_guard.py` with your credentials (or set them as environment variables).
 
 ---
 
-## 📖 Usage Guide
 
 ### Running the Application
 ```bash
