@@ -149,6 +149,13 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
     if 'alert_sent_time' not in st.session_state:
         st.session_state.alert_sent_time = None
 
+    if 'elder_a_vote' not in st.session_state:
+        st.session_state.elder_a_vote = None
+    if 'elder_b_vote' not in st.session_state:
+        st.session_state.elder_b_vote = None
+    if 'third_party_vote' not in st.session_state:
+        st.session_state.third_party_vote = None
+
     def add_log(message, type="info"):
         timestamp = time.strftime("%H:%M:%S")
         st.session_state.log_messages.insert(0, {"time": timestamp, "msg": message, "type": type})
@@ -179,6 +186,9 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
     if sim_mode == "Normal Grazing" and st.session_state.incident_state != "MONITORING":
         st.session_state.incident_state = "MONITORING"
         st.session_state.log_messages = []
+        st.session_state.elder_a_vote = None
+        st.session_state.elder_b_vote = None
+        st.session_state.third_party_vote = None
 
     # Generate Live Data based on selection
     # Use the passed region_coords (lat, lon)
@@ -205,6 +215,10 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
         if raid_detected and st.session_state.incident_state == "MONITORING":
             st.session_state.incident_state = "THREAT_DETECTED"
             add_log("AI detected anomalous grazing pattern (High Velocity Vector)", "error")
+            # Reset votes for new incident
+            st.session_state.elder_a_vote = None
+            st.session_state.elder_b_vote = None
+            st.session_state.third_party_vote = None
 
         # --- MAIN LAYOUT ---
         col1, col2 = st.columns([2, 1])
@@ -269,52 +283,75 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                         st.error("Please enter at least one Phone Number.")
 
             elif st.session_state.incident_state == "WAITING_FOR_CHIEF":
-                st.info("⏳ Waiting for Chief's Confirmation...")
-                st.caption("Please wait for the Chief to reply or call back.")
+                st.info("⏳ VERIFICATION PROTOCOL INITIATED")
                 
-                with st.status("Verification in Progress", expanded=True):
-                    st.write("SMS Status: Sent ✅")
-                    st.write("Awaiting feedback...")
-                    
-                    c1, c2 = st.columns(2)
-                    if c1.button("✅ Chief Confirmed: RAID"):
-                        st.session_state.incident_state = "READY_TO_DISPATCH"
-                        add_log("Chief confirmed raid activity via phone.", "error")
-                        st.rerun()
-                    
-                    if c2.button("❌ False Alarm"):
-                        st.session_state.incident_state = "MONITORING"
-                        add_log("Chief marked as False Alarm.", "success")
-                        st.rerun()
-                    
-                    st.markdown("---")
-                    
-                    # Auto-Polling Logic
-                    st.write("🔄 **Live Status:** Listening for reply...")
-                    
-                    # Perform the check
-                    # We pass the list of phones to check for replies from ANY of them
-                    found, result, debug_msgs = check_for_sms_reply(TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, elder_phones, st.session_state.alert_sent_time)
-                    
-                    if found:
-                        st.success(f"📩 Reply Received: '{result}'")
-                        st.session_state.incident_state = "READY_TO_DISPATCH"
-                        add_log(f"Chief replied via SMS: {result}", "error")
-                        st.balloons()
-                        time.sleep(2)
-                        st.rerun()
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    st.markdown("### 👴 Elder A (Community)")
+                    if st.session_state.elder_a_vote is None:
+                        col_a1, col_a2 = st.columns(2)
+                        if col_a1.button("SAFE", key="a_safe"): st.session_state.elder_a_vote = "SAFE"; st.rerun()
+                        if col_a2.button("THREAT", key="a_threat"): st.session_state.elder_a_vote = "THREAT"; st.rerun()
                     else:
-                        # Show debug info in an expander (collapsed by default)
-                        with st.expander("Debug: Incoming Messages"):
-                            if debug_msgs:
-                                for m in debug_msgs:
-                                    st.write(m)
-                            else:
-                                st.write("No messages fetched.")
+                        st.write(f"Vote: {st.session_state.elder_a_vote}")
                         
-                        # Wait and Rerun to create a polling loop
-                        time.sleep(5)
-                        st.rerun()
+                with col_b:
+                    st.markdown("### 🔭 Elder B (Scout)")
+                    if st.session_state.elder_b_vote is None:
+                        col_b1, col_b2 = st.columns(2)
+                        if col_b1.button("SAFE", key="b_safe"): st.session_state.elder_b_vote = "SAFE"; st.rerun()
+                        if col_b2.button("THREAT", key="b_threat"): st.session_state.elder_b_vote = "THREAT"; st.rerun()
+                    else:
+                        st.write(f"Vote: {st.session_state.elder_b_vote}")
+
+                st.markdown("---")
+
+                # --- LOGIC ENGINE ---
+                if st.session_state.elder_a_vote and st.session_state.elder_b_vote:
+                    
+                    # SCENARIO 1: CONSENSUS (Both Agree)
+                    if st.session_state.elder_a_vote == st.session_state.elder_b_vote:
+                        final_decision = st.session_state.elder_a_vote
+                        if final_decision == "SAFE":
+                            st.success("✅ CONSENSUS: FALSE ALARM. STANDING DOWN.")
+                            if st.button("Reset System"):
+                                st.session_state.incident_state = "MONITORING"
+                                st.rerun()
+                        else:
+                            st.error("🚀 CONSENSUS: THREAT CONFIRMED. POLICE DISPATCHED.")
+                            st.toast("Police Units Deployed!", icon="🚓")
+                            if st.button("Proceed to Dispatch"):
+                                st.session_state.incident_state = "DISPATCHED"
+                                st.rerun()
+
+                    # SCENARIO 2: CONFLICT (They Disagree) -> THIRD PARTY
+                    else:
+                        st.warning("⚠️ CONFLICT OF INTEREST DETECTED")
+                        st.write("Votes do not match. Escalating to Neutral Third Party.")
+                        
+                        st.markdown("### ⚖️ Area Chief (Neutral)")
+                        col_c1, col_c2 = st.columns(2)
+                        if st.session_state.third_party_vote is None:
+                            if col_c1.button("RULING: SAFE", key="c_safe"): 
+                                st.session_state.third_party_vote = "SAFE"
+                                st.rerun()
+                            if col_c2.button("RULING: THREAT", key="c_threat"): 
+                                st.session_state.third_party_vote = "THREAT"
+                                st.rerun()
+                        
+                        # Final Ruling Display
+                        if st.session_state.third_party_vote == "SAFE":
+                            st.success("✅ CHIEF RULING: STAND DOWN.")
+                            if st.button("Reset System"):
+                                st.session_state.incident_state = "MONITORING"
+                                st.rerun()
+                        elif st.session_state.third_party_vote == "THREAT":
+                            st.error("🚀 CHIEF RULING: ACTION AUTHORIZED.")
+                            st.toast("Chief Authorized Dispatch!", icon="👮")
+                            if st.button("Proceed to Dispatch"):
+                                st.session_state.incident_state = "DISPATCHED"
+                                st.rerun()
 
             elif st.session_state.incident_state == "READY_TO_DISPATCH":
                 st.error("⚠️ RAID CONFIRMED - AUTHORIZED TO DISPATCH")
