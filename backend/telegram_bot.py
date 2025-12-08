@@ -5,16 +5,16 @@ Supports multi-user verification with consensus voting
 """
 
 import asyncio
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from datetime import datetime
 
 
 async def send_telegram_alert_async(bot_token: str, chat_id: str, message: str, 
                                     region: str = "", threat_level: str = "", 
-                                    timestamp: str = ""):
+                                    timestamp: str = "", incident_id: str = ""):
     """
-    Send alert message directly to Telegram bot.
+    Send alert message directly to Telegram bot with interactive buttons.
     Uses async to avoid blocking.
     """
     try:
@@ -30,13 +30,21 @@ async def send_telegram_alert_async(bot_token: str, chat_id: str, message: str,
 ⚠️ *Threat Level:* {threat_level}
 🕒 *Time:* {timestamp}
 
-_Reply with: SAFE, THREAT, or CONFIRM_
+_Click a button below to verify:_
 """
+        
+        # Create interactive buttons
+        keyboard = [[
+            InlineKeyboardButton("✅ SAFE", callback_data=f"vote_safe_{incident_id}_{chat_id}"),
+            InlineKeyboardButton("🚨 THREAT", callback_data=f"vote_threat_{incident_id}_{chat_id}")
+        ]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
         await bot.send_message(
             chat_id=chat_id,
             text=formatted_message.strip(),
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=reply_markup
         )
         
         return True, "Telegram alert sent successfully"
@@ -49,9 +57,9 @@ _Reply with: SAFE, THREAT, or CONFIRM_
 
 async def send_telegram_to_multiple_async(bot_token: str, chat_ids: list, message: str,
                                          region: str = "", threat_level: str = "",
-                                         timestamp: str = ""):
+                                         timestamp: str = "", incident_id: str = ""):
     """
-    Send alert to multiple Telegram users.
+    Send alert to multiple Telegram users with interactive buttons.
     Returns success count and any errors.
     """
     bot = Bot(token=bot_token)
@@ -66,15 +74,23 @@ async def send_telegram_to_multiple_async(bot_token: str, chat_ids: list, messag
 ⚠️ *Threat Level:* {threat_level}
 🕒 *Time:* {timestamp}
 
-_Reply with: SAFE, THREAT, or CONFIRM_
+_Click a button below to verify:_
 """
+    
+    # Create interactive buttons - same for all users
+    keyboard = [[
+        InlineKeyboardButton("✅ SAFE", callback_data=f"vote_safe_{incident_id}"),
+        InlineKeyboardButton("🚨 THREAT", callback_data=f"vote_threat_{incident_id}")
+    ]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     for chat_id in chat_ids:
         try:
             await bot.send_message(
                 chat_id=chat_id.strip(),
                 text=formatted_message.strip(),
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
             results["success"] += 1
         except Exception as e:

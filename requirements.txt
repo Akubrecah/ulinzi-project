@@ -12,3 +12,5 @@ extra-streamlit-components
 fastapi
 uvicorn
 python-telegram-bot
+python-dotenv
+python-dotenv

@@ -4,6 +4,12 @@ import plotly.express as px
 import time
 import requests
 from datetime import datetime, timezone
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 
 API_URL = "http://localhost:8000"
 
@@ -165,30 +171,29 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
     st.sidebar.subheader("GrazingGuard Simulation")
     
     # SMS Settings
-    st.sidebar.markdown("### 📲 TextBee Settings")
-    # Hardcoded credentials as requested to hide them from UI
-    TEXTBEE_API_KEY = "901124e8-7fca-4468-85a8-075ef29dd819"
-    TEXTBEE_DEVICE_ID = "69312c2dd3fdd9bd6c54dfc7"
+    st.sidebar.markdown("### ⚙️ System Configuration")
     
-    # Updated to Text Area for multiple numbers
+    # Load Configuration from Environment
+    TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY", "")
+    TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID", "")
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+    
     elder_phones_input = st.sidebar.text_area(
         "Elder Phone Numbers (comma separated):", 
         value="+254719299900, +254700000000", 
         help="Enter up to 5 numbers, separated by commas."
     )
 
-    # Direct Telegram Bot Configuration
-    telegram_bot_token = st.sidebar.text_input(
-        "Telegram Bot Token:",
-        value="",
-        type="password",
-        help="Get from @BotFather on Telegram. Format: 123456789:ABCdefGHI..."
-    )
-    
+    # Telegram Chat IDs (Default from Env)
+    default_chat_ids = TELEGRAM_CHAT_ID
+    if os.getenv("TELEGRAM_CHAT_IDS"):
+        default_chat_ids = os.getenv("TELEGRAM_CHAT_IDS")
+        
     telegram_chat_ids_input = st.sidebar.text_area(
         "Telegram Chat IDs (comma separated):",
-        value="",
-        help="Enter up to 5 Telegram chat IDs, separated by commas. Get IDs from @userinfobot on Telegram."
+        value=default_chat_ids,
+        help="Enter up to 5 Telegram chat IDs. Defaults loaded from system config."
     )
     
     # Alert Method Selection
@@ -313,10 +318,13 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                     
                     # Send Telegram if method includes Telegram
                     if "Telegram" in alert_method or "Both" in alert_method:
-                        if telegram_bot_token and telegram_chat_ids:
+                        # Use Env var if available, otherwise check if user entered it (disabled now)
+                        token_to_use = TELEGRAM_BOT_TOKEN
+                        
+                        if token_to_use and telegram_chat_ids:
                             try:
                                 telegram_payload = {
-                                    "bot_token": telegram_bot_token,
+                                    "bot_token": token_to_use,
                                     "chat_ids": telegram_chat_ids,
                                     "message": msg,
                                     "region": region_name,
@@ -332,7 +340,7 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                             except Exception as e:
                                 st.error(f"Telegram Error: {e}")
                         else:
-                            st.warning("Telegram: Please enter Bot Token and Chat IDs.")
+                            st.warning("Telegram: Configuration missing (Bot Token). Check .env file.")
                     
                     # If at least one alert was sent successfully, proceed
                     if alerts_sent:
