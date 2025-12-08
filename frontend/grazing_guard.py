@@ -177,10 +177,24 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
         help="Enter up to 5 numbers, separated by commas."
     )
 
-    # n8n Webhook URL
+    # n8n Webhook URL and Telegram Chat ID
     n8n_webhook_url = st.sidebar.text_input(
         "n8n Webhook URL (Optional):",
+        value="https://vmi2955047.contaboserver.net/webhook/863ccad9-ebba-4970-aaa5-c042aeea478c",
         help="Enter your n8n Webhook URL to forward alerts to Telegram."
+    )
+    
+    telegram_chat_id = st.sidebar.text_input(
+        "Telegram Chat ID:",
+        value="123456789",
+        help="Your Telegram chat ID. Get it from @userinfobot on Telegram."
+    )
+    
+    # Alert Method Selection
+    alert_method = st.sidebar.radio(
+        "Alert Method:",
+        ["Both (SMS + Telegram)", "SMS Only", "Telegram Only"],
+        help="Choose how to send threat alerts"
     )
     
     # Parse phone numbers
@@ -217,10 +231,13 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
 
         # Detect if ANY cow is showing raid identity
         raid_detected = "THREAT DETECTED" in live_data['status'].values
+        threat_count = (live_data['status'] == "THREAT DETECTED").sum()
         
         if raid_detected and st.session_state.incident_state == "MONITORING":
             st.session_state.incident_state = "THREAT_DETECTED"
-            add_log("AI detected anomalous grazing pattern (High Velocity Vector)", "error")
+            max_speed = live_data['speed_kmh'].max()
+            avg_speed = live_data['speed_kmh'].mean()
+            add_log(f"⚠️ THREAT: {threat_count} cows detected at {max_speed:.1f} km/h (avg: {avg_speed:.1f})", "error")
             # Reset votes for new incident
             st.session_state.elder_a_vote = None
             st.session_state.elder_b_vote = None
@@ -273,38 +290,54 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                 
                 st.warning("Action Required: Verify with Area Chief")
                 
-                if st.button("📲 Send SMS Alert to Chief"):
-                    if elder_phones:
-                        with st.spinner(f"Sending SMS to {len(elder_phones)} recipients..."):
-                            msg = f"ULINZI ALERT: Suspected Raid in {region_name}. Please CONFIRM status immediately."
-                            success, resp = send_alert_sms(TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, elder_phones, msg)
-                            if success:
-                                st.session_state.incident_state = "WAITING_FOR_CHIEF"
-                                st.session_state.alert_sent_time = datetime.now(timezone.utc)
-                                add_log(f"SMS Alert sent to {len(elder_phones)} recipients.", "warning")
-                                
-                                # Trigger n8n Webhook if URL is provided
-                                if n8n_webhook_url:
-                                    try:
-                                        n8n_payload = {
-                                            "webhook_url": n8n_webhook_url,
-                                            "message": msg,
-                                            "data": {
-                                                "region": region_name,
-                                                "timestamp": str(datetime.now()),
-                                                "threat_level": "HIGH"
-                                            }
-                                        }
-                                        requests.post(f"{API_URL}/alerts/n8n", json=n8n_payload)
-                                        add_log("n8n Webhook Triggered.", "info")
-                                    except Exception as e:
-                                        st.error(f"n8n Error: {e}")
-
-                                st.rerun()
-                            else:
-                                st.error(f"SMS Failed: {resp}")
-                    else:
-                        st.error("Please enter at least one Phone Number.")
+                if st.button("📲 Send Alert to Chief"):
+                    msg = f"ULINZI ALERT: Suspected Raid in {region_name}. Please CONFIRM status immediately."
+                    alerts_sent = []
+                    
+                    # Send SMS if method includes SMS
+                    if "SMS" in alert_method or "Both" in alert_method:
+                        if elder_phones:
+                            with st.spinner(f"Sending SMS to {len(elder_phones)} recipients..."):
+                                success, resp = send_alert_sms(TEXTBEE_API_KEY, TEXTBEE_DEVICE_ID, elder_phones, msg)
+                                if success:
+                                    alerts_sent.append(f"SMS to {len(elder_phones)} recipients")
+                                    add_log(f"📱 SMS Alert sent to {len(elder_phones)} recipients.", "warning")
+                                else:
+                                    st.error(f"SMS Failed: {resp}")
+                        else:
+                            st.error("Please enter at least one Phone Number for SMS.")
+                    
+                    # Send Telegram if method includes Telegram
+                    if "Telegram" in alert_method or "Both" in alert_method:
+                        if n8n_webhook_url and telegram_chat_id:
+                            try:
+                                n8n_payload = {
+                                    "webhook_url": n8n_webhook_url,
+                                    "message": msg,
+                                    "data": {
+                                        "chatId": telegram_chat_id,
+                                        "region": region_name,
+                                        "timestamp": str(datetime.now()),
+                                        "threat_level": "HIGH"
+                                    }
+                                }
+                                resp = requests.post(f"{API_URL}/alerts/n8n", json=n8n_payload)
+                                if resp.status_code == 200:
+                                    alerts_sent.append("Telegram")
+                                    add_log("📱 Telegram Alert Sent.", "info")
+                                else:
+                                    st.error(f"Telegram Failed: {resp.text}")
+                            except Exception as e:
+                                st.error(f"Telegram Error: {e}")
+                        else:
+                            st.warning("Telegram: Please configure Webhook URL and Chat ID.")
+                    
+                    # If at least one alert was sent successfully, proceed
+                    if alerts_sent:
+                        st.session_state.incident_state = "WAITING_FOR_CHIEF"
+                        st.session_state.alert_sent_time = datetime.now(timezone.utc)
+                        st.success(f"✅ Alerts sent via: {', '.join(alerts_sent)}")
+                        st.rerun()
 
             elif st.session_state.incident_state == "WAITING_FOR_CHIEF":
                 st.info("⏳ VERIFICATION PROTOCOL INITIATED")

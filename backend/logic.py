@@ -126,20 +126,40 @@ def train_isolation_forest():
     normal_data = get_cattle_data("Normal", num_cows=500, center_lat=0, center_lon=0) # Lat/Lon don't matter for training
     X_train = normal_data[['speed_kmh', 'hour_of_day']]
     
-    # Contamination = 1% (We expect raids to be rare anomalies)
-    model = IsolationForest(contamination=0.01, random_state=42)
+    # Increased contamination to 5% for better sensitivity
+    model = IsolationForest(contamination=0.05, random_state=42)
     model.fit(X_train)
     return model
+
+def detect_raid_with_rules(speed, hour):
+    """
+    Rule-based fallback for raid detection.
+    Returns True if characteristics match a raid pattern.
+    """
+    # Raid signature: High speed (>10 km/h) during night hours (midnight to 6 AM)
+    if speed > 10.0 and (hour >= 0 and hour <= 6):
+        return True
+    return False
 
 def trigger_n8n_webhook(webhook_url, data):
     """
     Sends a JSON payload to an n8n webhook.
+    Restructures the payload to match n8n's expected format.
     """
     if not webhook_url:
         return False, "No Webhook URL provided"
         
     try:
-        response = requests.post(webhook_url, json=data)
+        # Restructure payload for n8n
+        # Frontend sends: {message, data: {chatId, region, ...}}
+        # n8n expects: {chatId, message, data: {region, ...}}
+        payload = {
+            "chatId": data.get("data", {}).get("chatId", "123456789"),
+            "message": data.get("message", ""),
+            "data": data.get("data", {})
+        }
+        
+        response = requests.post(webhook_url, json=payload)
         if response.status_code == 200:
             return True, "Webhook triggered successfully"
         else:

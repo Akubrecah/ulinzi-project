@@ -76,8 +76,19 @@ def predict_cattle_threat(data: List[Dict]):
     
     features = df[['speed_kmh', 'hour_of_day']]
     scores = iso_forest_model.predict(features)
-    # Convert -1 (anomaly) to "THREAT DETECTED", 1 to "Safe"
-    status = ["THREAT DETECTED" if s == -1 else "Safe" for s in scores]
+    
+    # Hybrid detection: AI + Rule-based fallback
+    status = []
+    for i, s in enumerate(scores):
+        speed = df.iloc[i]['speed_kmh']
+        hour = df.iloc[i]['hour_of_day']
+        
+        # Use AI prediction OR rule-based detection
+        if s == -1 or logic.detect_raid_with_rules(speed, hour):
+            status.append("THREAT DETECTED")
+        else:
+            status.append("Safe")
+    
     return status
 
 # --- History Data (Regional Dashboard) ---
