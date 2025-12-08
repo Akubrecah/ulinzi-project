@@ -143,26 +143,33 @@ def detect_raid_with_rules(speed, hour):
 
 def trigger_n8n_webhook(webhook_url, data):
     """
-    Sends a JSON payload to an n8n webhook.
-    Restructures the payload to match n8n's expected format.
+    Sends a JSON payload to an n8n webhook via POST request.
     """
     if not webhook_url:
         return False, "No Webhook URL provided"
         
     try:
-        # Restructure payload for n8n
-        # Frontend sends: {message, data: {chatId, region, ...}}
-        # n8n expects: {chatId, message, data: {region, ...}}
+        # Extract and structure data for n8n
+        chat_id = data.get("data", {}).get("chatId", "123456789")
+        message = data.get("message", "")
+        region = data.get("data", {}).get("region", "Unknown")
+        threat_level = data.get("data", {}).get("threat_level", "MEDIUM")
+        timestamp = data.get("data", {}).get("timestamp", "")
+        
+        # Build JSON payload
         payload = {
-            "chatId": data.get("data", {}).get("chatId", "123456789"),
-            "message": data.get("message", ""),
-            "data": data.get("data", {})
+            "chatId": chat_id,
+            "message": message,
+            "region": region,
+            "threat_level": threat_level,
+            "timestamp": timestamp
         }
         
-        response = requests.post(webhook_url, json=payload)
+        response = requests.post(webhook_url, json=payload, timeout=10)
         if response.status_code == 200:
             return True, "Webhook triggered successfully"
         else:
             return False, f"Webhook failed with status {response.status_code}: {response.text}"
     except Exception as e:
         return False, str(e)
+
