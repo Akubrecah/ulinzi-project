@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Dict, Optional
 
 class LoginRequest(BaseModel):
     username: str
@@ -17,3 +17,9 @@ class CattleParams(BaseModel):
 
 class PredictionRequest(BaseModel):
     recent_data: List[float] # List of threat levels
+
+
+class WebhookRequest(BaseModel):
+    webhook_url: str
+    message: str
+    data: Dict = {}

@@ -176,6 +176,12 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
         value="+254719299900, +254700000000", 
         help="Enter up to 5 numbers, separated by commas."
     )
+
+    # n8n Webhook URL
+    n8n_webhook_url = st.sidebar.text_input(
+        "n8n Webhook URL (Optional):",
+        help="Enter your n8n Webhook URL to forward alerts to Telegram."
+    )
     
     # Parse phone numbers
     elder_phones = [p.strip() for p in elder_phones_input.split(",") if p.strip()]
@@ -276,6 +282,24 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                                 st.session_state.incident_state = "WAITING_FOR_CHIEF"
                                 st.session_state.alert_sent_time = datetime.now(timezone.utc)
                                 add_log(f"SMS Alert sent to {len(elder_phones)} recipients.", "warning")
+                                
+                                # Trigger n8n Webhook if URL is provided
+                                if n8n_webhook_url:
+                                    try:
+                                        n8n_payload = {
+                                            "webhook_url": n8n_webhook_url,
+                                            "message": msg,
+                                            "data": {
+                                                "region": region_name,
+                                                "timestamp": str(datetime.now()),
+                                                "threat_level": "HIGH"
+                                            }
+                                        }
+                                        requests.post(f"{API_URL}/alerts/n8n", json=n8n_payload)
+                                        add_log("n8n Webhook Triggered.", "info")
+                                    except Exception as e:
+                                        st.error(f"n8n Error: {e}")
+
                                 st.rerun()
                             else:
                                 st.error(f"SMS Failed: {resp}")

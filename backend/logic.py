@@ -130,3 +130,19 @@ def train_isolation_forest():
     model = IsolationForest(contamination=0.01, random_state=42)
     model.fit(X_train)
     return model
+
+def trigger_n8n_webhook(webhook_url, data):
+    """
+    Sends a JSON payload to an n8n webhook.
+    """
+    if not webhook_url:
+        return False, "No Webhook URL provided"
+        
+    try:
+        response = requests.post(webhook_url, json=data)
+        if response.status_code == 200:
+            return True, "Webhook triggered successfully"
+        else:
+            return False, f"Webhook failed with status {response.status_code}: {response.text}"
+    except Exception as e:
+        return False, str(e)

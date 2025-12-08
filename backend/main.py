@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Body
-from .models import LoginRequest, SMSRequest, CattleParams, PredictionRequest
+from .models import LoginRequest, SMSRequest, CattleParams, PredictionRequest, WebhookRequest
 from . import logic, synthetic_data, lstm_model
 from typing import List, Dict
 import pandas as pd
@@ -47,6 +47,14 @@ def check_sms(api_key: str, device_id: str, sender_phone: str, min_timestamp: st
             
     found, result, debug = logic.check_for_sms_reply(api_key, device_id, phones, ts)
     return {"found": found, "result": result, "debug": debug}
+
+@app.post("/alerts/n8n")
+def trigger_n8n(req: WebhookRequest):
+    success, msg = logic.trigger_n8n_webhook(req.webhook_url, {"message": req.message, "data": req.data})
+    if success:
+        return {"status": "success", "message": msg}
+    else:
+        raise HTTPException(status_code=500, detail=msg)
 
 # --- Cattle Data (GrazingGuard) ---
 @app.post("/cattle/data")
