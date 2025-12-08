@@ -23,3 +23,16 @@ class WebhookRequest(BaseModel):
     webhook_url: str
     message: str
     data: Dict = {}
+
+class TelegramRequest(BaseModel):
+    bot_token: str
+    chat_ids: List[str]  # Changed to list for multi-user
+    message: str
+    region: str = ""
+    threat_level: str = ""
+    timestamp: str = ""
+
+class TelegramCheckRequest(BaseModel):
+    bot_token: str
+    chat_ids: List[str]
+    min_timestamp: Optional[str] = None

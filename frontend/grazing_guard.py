@@ -177,17 +177,18 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
         help="Enter up to 5 numbers, separated by commas."
     )
 
-    # n8n Webhook URL and Telegram Chat ID
-    n8n_webhook_url = st.sidebar.text_input(
-        "n8n Webhook URL (Optional):",
-        value="https://vmi2955047.contaboserver.net/webhook/863ccad9-ebba-4970-aaa5-c042aeea478c",
-        help="Enter your n8n Webhook URL to forward alerts to Telegram."
+    # Direct Telegram Bot Configuration
+    telegram_bot_token = st.sidebar.text_input(
+        "Telegram Bot Token:",
+        value="",
+        type="password",
+        help="Get from @BotFather on Telegram. Format: 123456789:ABCdefGHI..."
     )
     
-    telegram_chat_id = st.sidebar.text_input(
-        "Telegram Chat ID:",
-        value="123456789",
-        help="Your Telegram chat ID. Get it from @userinfobot on Telegram."
+    telegram_chat_ids_input = st.sidebar.text_area(
+        "Telegram Chat IDs (comma separated):",
+        value="",
+        help="Enter up to 5 Telegram chat IDs, separated by commas. Get IDs from @userinfobot on Telegram."
     )
     
     # Alert Method Selection
@@ -196,6 +197,9 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
         ["Both (SMS + Telegram)", "SMS Only", "Telegram Only"],
         help="Choose how to send threat alerts"
     )
+    
+    # Parse Telegram chat IDs
+    telegram_chat_ids = [c.strip() for c in telegram_chat_ids_input.split(",") if c.strip()]
     
     # Parse phone numbers
     elder_phones = [p.strip() for p in elder_phones_input.split(",") if p.strip()]
@@ -309,28 +313,26 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                     
                     # Send Telegram if method includes Telegram
                     if "Telegram" in alert_method or "Both" in alert_method:
-                        if n8n_webhook_url and telegram_chat_id:
+                        if telegram_bot_token and telegram_chat_ids:
                             try:
-                                n8n_payload = {
-                                    "webhook_url": n8n_webhook_url,
+                                telegram_payload = {
+                                    "bot_token": telegram_bot_token,
+                                    "chat_ids": telegram_chat_ids,
                                     "message": msg,
-                                    "data": {
-                                        "chatId": telegram_chat_id,
-                                        "region": region_name,
-                                        "timestamp": str(datetime.now()),
-                                        "threat_level": "HIGH"
-                                    }
+                                    "region": region_name,
+                                    "threat_level": "HIGH",
+                                    "timestamp": str(datetime.now())
                                 }
-                                resp = requests.post(f"{API_URL}/alerts/n8n", json=n8n_payload)
+                                resp = requests.post(f"{API_URL}/alerts/telegram", json=telegram_payload)
                                 if resp.status_code == 200:
-                                    alerts_sent.append("Telegram")
-                                    add_log("📱 Telegram Alert Sent.", "info")
+                                    alerts_sent.append(f"Telegram to {len(telegram_chat_ids)} users")
+                                    add_log(f"📱 Telegram sent to {len(telegram_chat_ids)} users.", "info")
                                 else:
-                                    st.error(f"Telegram Failed: {resp.text}")
+                                    st.error(f"Telegram Failed: {resp.json().get('detail', resp.text)}")
                             except Exception as e:
                                 st.error(f"Telegram Error: {e}")
                         else:
-                            st.warning("Telegram: Please configure Webhook URL and Chat ID.")
+                            st.warning("Telegram: Please enter Bot Token and Chat IDs.")
                     
                     # If at least one alert was sent successfully, proceed
                     if alerts_sent:

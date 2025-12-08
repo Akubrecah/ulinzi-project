@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Body
-from .models import LoginRequest, SMSRequest, CattleParams, PredictionRequest, WebhookRequest
-from . import logic, synthetic_data, lstm_model
+from .models import LoginRequest, SMSRequest, CattleParams, PredictionRequest, WebhookRequest, TelegramRequest, TelegramCheckRequest
+from . import logic, synthetic_data, lstm_model, telegram_bot
 from typing import List, Dict
 import pandas as pd
 import numpy as np
@@ -55,6 +55,46 @@ def trigger_n8n(req: WebhookRequest):
         return {"status": "success", "message": msg}
     else:
         raise HTTPException(status_code=500, detail=msg)
+
+@app.post("/alerts/telegram")
+def send_telegram(req: TelegramRequest):
+    """Send alert directly to Telegram bot (supports multiple users)"""
+    success, msg = telegram_bot.send_telegram_to_multiple(
+        bot_token=req.bot_token,
+        chat_ids=req.chat_ids,
+        message=req.message,
+        region=req.region,
+        threat_level=req.threat_level,
+        timestamp=req.timestamp
+    )
+    if success:
+        return {"status": "success", "message": msg}
+    else:
+        raise HTTPException(status_code=500, detail=msg)
+
+@app.post("/telegram/check")
+def check_telegram(req: TelegramCheckRequest):
+    """Check for Telegram responses from users"""
+    from datetime import datetime as dt
+    
+    min_ts = None
+    if req.min_timestamp:
+        try:
+            min_ts = dt.fromisoformat(req.min_timestamp)
+        except:
+            pass
+    
+    success, responses = telegram_bot.check_telegram_responses(
+        bot_token=req.bot_token,
+        chat_ids=req.chat_ids,
+        min_timestamp=min_ts
+    )
+    
+    if success:
+        return {"responses": responses}
+    else:
+        return {"responses": [], "error": responses}
+
 
 # --- Cattle Data (GrazingGuard) ---
 @app.post("/cattle/data")
