@@ -5,9 +5,16 @@ Supports multi-user verification with consensus voting
 """
 
 import asyncio
+import ssl
+import certifi
+import httpx
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from datetime import datetime
+
+# Create SSL context with certifi certificates
+ssl_context = ssl.create_default_context(cafile=certifi.where())
+
 
 
 async def send_telegram_alert_async(bot_token: str, chat_id: str, message: str, 
@@ -18,7 +25,9 @@ async def send_telegram_alert_async(bot_token: str, chat_id: str, message: str,
     Uses async to avoid blocking.
     """
     try:
-        bot = Bot(token=bot_token)
+        # Create httpx client with SSL context
+        httpx_client = httpx.AsyncClient(verify=ssl_context)
+        bot = Bot(token=bot_token, request=httpx_client)
         
         # Format message with Markdown
         formatted_message = f"""
@@ -62,7 +71,8 @@ async def send_telegram_to_multiple_async(bot_token: str, chat_ids: list, messag
     Send alert to multiple Telegram users with interactive buttons.
     Returns success count and any errors.
     """
-    bot = Bot(token=bot_token)
+    httpx_client = httpx.AsyncClient(verify=ssl_context)
+    bot = Bot(token=bot_token, request=httpx_client)
     results = {"success": 0, "failed": 0, "errors": []}
     
     formatted_message = f"""
