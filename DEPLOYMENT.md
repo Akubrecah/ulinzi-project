@@ -44,7 +44,8 @@ If you prefer another provider, **Render** is a great free alternative.
     -   **Name:** `ulinzi-project`
     -   **Runtime:** `Python 3`
     -   **Build Command:** `pip install -r requirements.txt`
-    -   **Start Command:** `streamlit run app.py`
+    -   **Start Command:** `streamlit run frontend/app.py`
+    -   **Note:** We have added a `render.yaml` file to the repository. Render should automatically detect this and configure the service for you if you select "Blueprint" instead of "Web Service", or it will pre-fill these settings.
     -   **Free Tier:** Select "Free".
     -   Click **Create Web Service**.
 
