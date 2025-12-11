@@ -28,7 +28,7 @@ def get_resized_img_as_base64(file, max_width=1920):
             img = img.resize((new_width, new_height))
         
         buffered = io.BytesIO()
-API_URL = "http://localhost:8000"
+API_URL = "http://127.0.0.1:8000"
 
 # --- Authentication with Persistence ---
 def get_manager():

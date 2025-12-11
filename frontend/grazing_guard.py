@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-API_URL = "http://localhost:8000"
+API_URL = "http://127.0.0.1:8000"
 
 # --- SMS CONFIGURATION (TextBee) ---
 def send_alert_sms(api_key, device_id, recipients, message):
