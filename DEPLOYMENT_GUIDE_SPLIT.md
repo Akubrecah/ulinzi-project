@@ -40,4 +40,8 @@ This guide explains how to deploy the **Backend** to Render and the **Frontend**
 ## Troubleshooting
 
 -   **Backend 502/Timeout**: Render free tier spins down after inactivity. The first request might take 50+ seconds. Streamlit might time out. Just refresh the Streamlit page.
+-   **Connection Error (127.0.0.1)**: This means your Frontend doesn't know where the Backend is.
+    -   **Fix**: Go to Streamlit Cloud Settings -> Environment Variables.
+    -   Add `API_URL` = `https://ulinzi-project.onrender.com` (Your Render URL).
+    -   **Important**: Log out of the app and log back in to verify.
 -   **Connection Error**: Check if `API_URL` in Streamlit settings matches the Render URL exactly (https, no trailing slash).
