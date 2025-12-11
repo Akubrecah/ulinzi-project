@@ -45,3 +45,14 @@ This guide explains how to deploy the **Backend** to Render and the **Frontend**
     -   Add `API_URL` = `https://ulinzi-project.onrender.com` (Your Render URL).
     -   **Important**: Log out of the app and log back in to verify.
 -   **Connection Error**: Check if `API_URL` in Streamlit settings matches the Render URL exactly (https, no trailing slash).
+
+## ⚡ Keeping Your App Awake (Always Online)
+
+Free hosting tiers (Render & Streamlit) go to "sleep" after 15 minutes of inactivity. To keep them running 24/7:
+
+1.  **Use a Free Uptime Monitor**:
+    -   Sign up for **UptimeRobot** (uptimerobot.com) or **Cron-job.org**.
+2.  **Create 2 Monitors**:
+    -   **Monitor 1 (Backend)**: Create a new HTTP(s) monitor for your Render URL (`https://ulinzi-project.onrender.com`). Set interval to **5 minutes**.
+    -   **Monitor 2 (Frontend)**: Create a new HTTP(s) monitor for your Streamlit URL (`https://<your-app>.streamlit.app`). Set interval to **10 minutes**.
+3.  **Why?**: This sends a "ping" to your servers regularly, tricking them into thinking they are active, so they never spin down.

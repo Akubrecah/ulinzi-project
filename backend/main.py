@@ -23,6 +23,7 @@ lstm_scalers = {}
 iso_forest_model = logic.train_isolation_forest()
 
 @app.get("/")
+@app.head("/")
 def read_root():
     return {"status": "online", "system": "Ulinzi Backend"}
 
