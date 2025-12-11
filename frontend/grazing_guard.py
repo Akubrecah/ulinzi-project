@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 
-from .config_loader import get_config
+from config_loader import get_config
 
 # Load environment variables
 load_dotenv()
