@@ -374,46 +374,46 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
                     else:
                         st.write(f"Vote: {st.session_state.elder_b_vote}")
 
-                # --- SMS REPLY CHECK (Polling) ---
+                # --- SMS REPLY CHECK (Auto-Polling) ---
                 st.markdown("---")
-                st.markdown("### 📨 Incoming Intelligence")
+                st.markdown("### 📨 Incoming Intelligence (Live Feed)")
                 
                 col_check, col_status = st.columns([1, 2])
                 with col_check:
-                    if st.button("🔄 Check for SMS Replies"):
-                        if elder_phones and TEXTBEE_API_KEY:
-                            with st.spinner("Scanning SMS Gateway..."):
-                                # Check for replies since alert was sent
-                                found, msg_content, debug_info = check_for_sms_reply(
-                                    TEXTBEE_API_KEY, 
-                                    TEXTBEE_DEVICE_ID, 
-                                    elder_phones, 
-                                    st.session_state.alert_sent_time
-                                )
+                    # Auto-poll if we have keys and phones
+                    if elder_phones and TEXTBEE_API_KEY:
+                         with st.spinner("📡 Scanning specifically for 'ACTIVE RAID' response..."):
+                            # Check for replies since alert was sent
+                            found, msg_content, debug_info = check_for_sms_reply(
+                                TEXTBEE_API_KEY, 
+                                TEXTBEE_DEVICE_ID, 
+                                elder_phones, 
+                                st.session_state.alert_sent_time
+                            )
+                            
+                            if found:
+                                st.success("✅ NEW MSG RECEIVED")
+                                add_log(f"📩 Reply: {msg_content}", "warning")
                                 
-                                if found:
-                                    st.success("✅ NEW MSG RECEIVED")
-                                    add_log(f"📩 Reply: {msg_content}", "warning")
-                                    
-                                    # Auto-Confirm if "RAID" or "ACTIVE" is in the message
-                                    if "RAID" in msg_content.upper() or "ACTIVE" in msg_content.upper():
-                                        st.session_state.elder_a_vote = "THREAT"
-                                        st.session_state.elder_b_vote = "THREAT"
-                                        st.session_state.incident_state = "READY_TO_DISPATCH"
-                                        st.toast("CONFIRMED VIA SMS: RAID ACTIVE", icon="🚨")
-                                        st.rerun()
-                                    
-                                    # Handle Safe
-                                    elif "SAFE" in msg_content.upper() or "FALSE" in msg_content.upper():
-                                        st.session_state.elder_a_vote = "SAFE"
-                                        st.session_state.elder_b_vote = "SAFE"
-                                        st.rerun()
-                                else:
-                                    st.info("No new relevant replies found.")
-                                    # Optional: Show debug info for troubleshooting
-                                    # st.json(debug_info) 
-                        else:
-                            st.warning("SMS Configuration missing.")
+                                # Auto-Confirm if "RAID" or "ACTIVE" is in the message
+                                if "RAID" in msg_content.upper() or "ACTIVE" in msg_content.upper():
+                                    st.session_state.elder_a_vote = "THREAT"
+                                    st.session_state.elder_b_vote = "THREAT"
+                                    st.session_state.incident_state = "READY_TO_DISPATCH"
+                                    st.toast("CONFIRMED VIA SMS: RAID ACTIVE", icon="🚨")
+                                    st.rerun()
+                                
+                                # Handle Safe
+                                elif "SAFE" in msg_content.upper() or "FALSE" in msg_content.upper():
+                                    st.session_state.elder_a_vote = "SAFE"
+                                    st.session_state.elder_b_vote = "SAFE"
+                                    st.rerun()
+                            else:
+                                st.info("Scanning for reply... (Auto-refreshing every 5s)")
+                                time.sleep(5)
+                                st.rerun()
+                    else:
+                        st.warning("SMS Configuration missing.")
 
 
                 st.markdown("---")
