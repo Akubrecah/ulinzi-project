@@ -28,8 +28,10 @@ def get_resized_img_as_base64(file, max_width=1920):
             img = img.resize((new_width, new_height))
         
         buffered = io.BytesIO()
+from .config_loader import get_config
+
 # Default to local, but allow Env Var override (e.g. for Streamlit Cloud connecting to Render)
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+API_URL = get_config("API_URL", "http://127.0.0.1:8000")
 
 # --- Authentication with Persistence ---
 def get_manager():

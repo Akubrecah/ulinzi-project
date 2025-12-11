@@ -7,11 +7,13 @@ from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 
+from .config_loader import get_config
+
 # Load environment variables
 load_dotenv()
 
 
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+API_URL = get_config("API_URL", "http://127.0.0.1:8000")
 
 # --- SMS CONFIGURATION (TextBee) ---
 def send_alert_sms(api_key, device_id, recipients, message):
@@ -174,10 +176,10 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
     st.sidebar.markdown("### ⚙️ System Configuration")
     
     # Load Configuration from Environment
-    TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY", "")
-    TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID", "")
-    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+    TEXTBEE_API_KEY = get_config("TEXTBEE_API_KEY", "")
+    TEXTBEE_DEVICE_ID = get_config("TEXTBEE_DEVICE_ID", "")
+    TELEGRAM_BOT_TOKEN = get_config("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHAT_ID = get_config("TELEGRAM_CHAT_ID", "")
     
     elder_phones_input = st.sidebar.text_area(
         "Elder Phone Numbers (comma separated):", 
@@ -187,8 +189,8 @@ def render_grazing_guard(region_name="West Pokot", region_coords=[1.433, 35.115]
 
     # Telegram Chat IDs (Default from Env)
     default_chat_ids = TELEGRAM_CHAT_ID
-    if os.getenv("TELEGRAM_CHAT_IDS"):
-        default_chat_ids = os.getenv("TELEGRAM_CHAT_IDS")
+    if get_config("TELEGRAM_CHAT_IDS"):
+        default_chat_ids = get_config("TELEGRAM_CHAT_IDS")
         
     telegram_chat_ids_input = st.sidebar.text_area(
         "Telegram Chat IDs (comma separated):",
